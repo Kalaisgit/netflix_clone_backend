@@ -2,7 +2,7 @@ import express from "express";
 import passport from "passport";
 import session from "express-session";
 import dotenv from "dotenv";
-import "./config/passportConfig.js"; // Passport config for Google strategy
+import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors"; // Import the cors package
 import pg from "pg"; // Using PostgreSQL db
 
@@ -56,7 +56,7 @@ app.get(
 app.get(
   "/auth/google/callback",
   passport.authenticate("google", {
-    failureRedirect: process.env.FRONT_END_URL,
+    failureRedirect: process.env.FRONTEND_URL,
   }),
   async (req, res) => {
     const { name, email } = req.user._json; // Extracting from _json
@@ -81,7 +81,7 @@ app.get(
       console.error("Error adding user to database:", error);
     }
 
-    res.redirect(process.env.FRONT_END_URL);
+    res.redirect(process.env.FRONTEND_URL);
   }
 );
 
@@ -373,8 +373,8 @@ app.put("/profiles", async (req, res) => {
   }
 });
 
-// Start the server
+/*Start the server
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-});
+});*/
