@@ -49,12 +49,12 @@ app.use(passport.session());
 
 // Google Authentication Routes
 app.get(
-  `${process.env.BACKEND_URL}/auth/google`,
+  `/auth/google`,
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
 app.get(
-  `${process.env.BACKEND_URL}/auth/google/callback`,
+  `/auth/google/callback`,
   passport.authenticate("google", {
     failureRedirect: process.env.FRONTEND_URL,
   }),
@@ -86,7 +86,7 @@ app.get(
 );
 
 // Check if user is authenticated
-app.get(`${process.env.BACKEND_URL}/auth/status`, (req, res) => {
+app.get(`/auth/status`, (req, res) => {
   if (req.isAuthenticated()) {
     res.json({
       authenticated: true,
@@ -97,7 +97,7 @@ app.get(`${process.env.BACKEND_URL}/auth/status`, (req, res) => {
   }
 });
 
-app.post(`${process.env.BACKEND_URL}/auth/logout`, (req, res) => {
+app.post(`/auth/logout`, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(403).json({ message: "User not authenticated" });
   }
@@ -111,7 +111,7 @@ app.post(`${process.env.BACKEND_URL}/auth/logout`, (req, res) => {
 });
 
 // Add a favorite movie
-app.post(`${process.env.BACKEND_URL}/favorites`, async (req, res) => {
+app.post(`/favorites`, async (req, res) => {
   console.log("Received request to add favorite:", req.body); // Log incoming request data
   const { email, profile_id, movie_id, movie_poster, movie_title, movie_year } =
     req.body;
@@ -175,50 +175,45 @@ app.post(`${process.env.BACKEND_URL}/favorites`, async (req, res) => {
 });
 
 // Remove a favorite movie
-app.delete(
-  `${process.env.BACKEND_URL}/favorites/:movie_id/:profile_id`,
-  async (req, res) => {
-    const { movie_id, profile_id } = req.params;
+app.delete(`/favorites/:movie_id/:profile_id`, async (req, res) => {
+  const { movie_id, profile_id } = req.params;
 
-    if (!req.isAuthenticated() || req.user.profile_name === "Guest") {
-      return res
-        .status(403)
-        .json({ message: "Guests cannot remove favorites." });
-    }
-
-    try {
-      // Find the user in the database
-      const userResult = await db.query(
-        "SELECT user_id FROM users WHERE email = $1",
-        [req.user.emails[0].value]
-      );
-
-      if (userResult.rows.length === 0) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const userId = userResult.rows[0].user_id;
-
-      // Delete the movie from the favorites table, using user_id, movie_id, and profile_id
-      const deleteResult = await db.query(
-        "DELETE FROM favorites WHERE user_id = $1 AND movie_id = $2 AND profile_id = $3",
-        [userId, movie_id, profile_id]
-      );
-
-      if (deleteResult.rowCount === 0) {
-        return res.status(404).json({ message: "Favorite not found" });
-      }
-
-      res.status(200).json({ message: "Movie removed from favorites" });
-    } catch (error) {
-      console.error("Error removing favorite movie:", error);
-      res.status(500).json({ message: "Failed to remove favorite movie" });
-    }
+  if (!req.isAuthenticated() || req.user.profile_name === "Guest") {
+    return res.status(403).json({ message: "Guests cannot remove favorites." });
   }
-);
+
+  try {
+    // Find the user in the database
+    const userResult = await db.query(
+      "SELECT user_id FROM users WHERE email = $1",
+      [req.user.emails[0].value]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const userId = userResult.rows[0].user_id;
+
+    // Delete the movie from the favorites table, using user_id, movie_id, and profile_id
+    const deleteResult = await db.query(
+      "DELETE FROM favorites WHERE user_id = $1 AND movie_id = $2 AND profile_id = $3",
+      [userId, movie_id, profile_id]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      return res.status(404).json({ message: "Favorite not found" });
+    }
+
+    res.status(200).json({ message: "Movie removed from favorites" });
+  } catch (error) {
+    console.error("Error removing favorite movie:", error);
+    res.status(500).json({ message: "Failed to remove favorite movie" });
+  }
+});
 
 // Get favorites for a specific profile of the authenticated user
-app.get(`${process.env.BACKEND_URL}/favorites`, async (req, res) => {
+app.get(`/favorites`, async (req, res) => {
   const { profile_id } = req.query;
 
   // Check if profile_id is provided
@@ -260,7 +255,7 @@ app.get(`${process.env.BACKEND_URL}/favorites`, async (req, res) => {
 });
 
 // Get user by email
-app.get(`${process.env.BACKEND_URL}/users`, async (req, res) => {
+app.get(`/users`, async (req, res) => {
   const { email } = req.query;
 
   try {
@@ -281,7 +276,7 @@ app.get(`${process.env.BACKEND_URL}/users`, async (req, res) => {
 });
 
 // Add a profile
-app.post(`${process.env.BACKEND_URL}/profiles`, async (req, res) => {
+app.post(`/profiles`, async (req, res) => {
   console.log(req.body); // Log the incoming request body
   const { user_id, profile_name } = req.body; // Expect user_id here
 
@@ -299,7 +294,7 @@ app.post(`${process.env.BACKEND_URL}/profiles`, async (req, res) => {
 });
 
 // Get profiles for the authenticated user
-app.get(`${process.env.BACKEND_URL}/profiles`, async (req, res) => {
+app.get(`/profiles`, async (req, res) => {
   if (!req.isAuthenticated() || !req.user) {
     return res.status(403).json({ message: "User not authenticated" });
   }
@@ -331,7 +326,7 @@ app.get(`${process.env.BACKEND_URL}/profiles`, async (req, res) => {
 });
 
 // Handle deleting a profile
-app.delete(`${process.env.BACKEND_URL}/profiles/:id`, async (req, res) => {
+app.delete(`/profiles/:id`, async (req, res) => {
   const { id } = req.params; // Extract profile ID from the URL
   try {
     // Add your logic to delete the profile from the database
@@ -351,7 +346,7 @@ app.delete(`${process.env.BACKEND_URL}/profiles/:id`, async (req, res) => {
   }
 });
 
-app.put(`${process.env.BACKEND_URL}/profiles`, async (req, res) => {
+app.put(`/profiles`, async (req, res) => {
   const { profile_id, profile_name } = req.body;
 
   if (!profile_id || !profile_name) {
