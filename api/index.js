@@ -56,7 +56,7 @@ app.get(
 app.get(
   `/auth/google/callback`,
   passport.authenticate("google", {
-    failureRedirect: process.env.FRONTEND_URL,
+    failureRedirect: "/",
   }),
   async (req, res) => {
     const { name, email } = req.user._json; // Extracting from _json
@@ -81,7 +81,7 @@ app.get(
       console.error("Error adding user to database:", error);
     }
 
-    res.redirect(process.env.FRONTEND_URL);
+    res.redirect(`${process.env.FRONTEND_URL}`);
   }
 );
 
