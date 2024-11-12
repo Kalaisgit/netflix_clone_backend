@@ -30,7 +30,7 @@ db.connect((err) => {
 app.use(express.json()); // To parse JSON requests
 app.use(
   cors({
-    origin: process.env.FRONT_END_URL, // Adjust this to match your frontend URL
+    origin: process.env.FRONTEND_URL, // Adjust this to match your frontend URL
     credentials: true, // Allow cookies to be sent with requests
   })
 );
