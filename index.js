@@ -30,7 +30,7 @@ db.connect((err) => {
 app.use(express.json()); // To parse JSON requests
 app.use(
   cors({
-    origin: "http://localhost:3000", // Adjust this to match your frontend URL
+    origin: process.env.FRONT_END_URL, // Adjust this to match your frontend URL
     credentials: true, // Allow cookies to be sent with requests
   })
 );
@@ -55,7 +55,9 @@ app.get(
 
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "http://localhost:3000" }),
+  passport.authenticate("google", {
+    failureRedirect: process.env.FRONT_END_URL,
+  }),
   async (req, res) => {
     const { name, email } = req.user._json; // Extracting from _json
 
@@ -79,7 +81,7 @@ app.get(
       console.error("Error adding user to database:", error);
     }
 
-    res.redirect("http://localhost:3000");
+    res.redirect(process.env.FRONT_END_URL);
   }
 );
 
