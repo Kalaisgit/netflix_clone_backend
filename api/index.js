@@ -3,8 +3,8 @@ import passport from "passport";
 import session from "express-session";
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
-import cors from "cors"; // Import the cors package
-import { createClient } from "@supabase/supabase-js"; // Import the Supabase client
+import cors from "cors";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -46,34 +46,29 @@ app.get(
 app.get(
   `/auth/google/callback`,
   passport.authenticate("google", {
-    failureRedirect: process.env.FRONTEND_URL,
+    failureRedirect: "/",
   }),
   async (req, res) => {
     const { name, email } = req.user._json; // Extracting from _json
 
     try {
-      // Check if user already exists
-      const { data: userResult, error } = await supabase
-        .from("users")
-        .select("user_id")
-        .eq("email", email);
+      const { data, error } = await supabase.auth.signInWithProvider({
+        provider: "google",
+        email,
+      });
 
-      if (userResult.length === 0) {
-        // If the user doesn't exist, insert them into the users table
-        const { data: newUser, error: insertError } = await supabase
-          .from("users")
-          .insert([{ email, name }]);
-
-        if (insertError) {
-          console.error("Error adding user to database:", insertError);
-        } else {
-          console.log("New user added:", email, name);
-        }
-      } else {
-        console.log("User already exists:", email);
+      if (error) {
+        console.error("Error signing in with Google:", error);
+        return res.status(500).json({ message: "Login failed" });
       }
+
+      // User data retrieved from Supabase
+      const user = data.user;
+
+      console.log("User signed in:", user);
     } catch (error) {
-      console.error("Error adding user to database:", error);
+      console.error("Error signing in with Google:", error);
+      return res.status(500).json({ message: "Login failed" });
     }
 
     res.redirect(`${process.env.FRONTEND_URL}`);
@@ -107,6 +102,7 @@ app.post(`/auth/logout`, (req, res) => {
 
 // Add a favorite movie
 app.post(`/favorites`, async (req, res) => {
+  console.log("Received request to add favorite:", req.body); // Log incoming request data
   const { email, profile_id, movie_id, movie_poster, movie_title, movie_year } =
     req.body;
 
@@ -117,31 +113,42 @@ app.post(`/favorites`, async (req, res) => {
   }
 
   try {
-    const { data: userResult, error } = await supabase
+    // First, fetch the user based on the email
+    const { data, error } = await supabase
       .from("users")
-      .select("user_id")
-      .eq("email", email);
+      .select("id") // Select user ID
+      .eq("email", email)
+      .single();
 
-    if (userResult.length === 0) {
-      return res.status(404).json({ error: "User not found" });
+    if (error) {
+      console.error("Error fetching user:", error);
+      return res.status(500).json({ error: "Error adding favorite" });
     }
 
-    const userId = userResult[0].user_id;
+    const userId = data.id;
 
-    const { data: checkResult } = await supabase
+    // Check if the favorite already exists for this user_id and profile_id
+    const { data: favoriteData, error: favoriteError } = await supabase
       .from("favorites")
       .select("*")
       .eq("user_id", userId)
       .eq("profile_id", profile_id)
-      .eq("movie_id", movie_id);
+      .eq("movie_id", movie_id)
+      .single();
 
-    if (checkResult.length > 0) {
+    if (favoriteError) {
+      console.error("Error checking favorite:", favoriteError);
+      return res.status(500).json({ error: "Error adding favorite" });
+    }
+
+    if (favoriteData) {
       return res
         .status(409)
         .json({ error: "This movie is already in favorites" });
     }
 
-    const { data: newFavorite, error: insertError } = await supabase
+    // Insert the favorite as it does not already exist
+    const { data: insertedFavorite, error: insertError } = await supabase
       .from("favorites")
       .insert([
         {
@@ -152,14 +159,15 @@ app.post(`/favorites`, async (req, res) => {
           movie_title,
           movie_year,
         },
-      ]);
+      ])
+      .single();
 
     if (insertError) {
-      console.error("Error adding favorite:", insertError);
+      console.error("Error inserting favorite:", insertError);
       return res.status(500).json({ error: "Error adding favorite" });
     }
 
-    res.status(201).json(newFavorite[0]);
+    res.status(201).json(insertedFavorite); // Return the newly added favorite
   } catch (error) {
     console.error("Error adding favorite:", error);
     res
@@ -168,51 +176,254 @@ app.post(`/favorites`, async (req, res) => {
   }
 });
 
-// Get favorites for a specific profile
+// Remove a favorite movie
+app.delete(`/favorites/:movie_id/:profile_id`, async (req, res) => {
+  const { movie_id, profile_id } = req.params;
+
+  if (!req.isAuthenticated() || req.user.profile_name === "Guest") {
+    return res.status(403).json({ message: "Guests cannot remove favorites." });
+  }
+
+  try {
+    // Find the user in the database
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", req.user.emails[0].value)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user:", error);
+      return res
+        .status(500)
+        .json({ message: "Failed to remove favorite movie" });
+    }
+
+    const userId = data.id;
+
+    // Delete the movie from the favorites table, using user_id, movie_id, and profile_id
+    const { data: deletedData, error: deleteError } = await supabase
+      .from("favorites")
+      .delete()
+      .eq("user_id", userId)
+      .eq("movie_id", movie_id)
+      .eq("profile_id", profile_id);
+
+    if (deleteError) {
+      console.error("Error deleting favorite:", deleteError);
+      return res
+        .status(500)
+        .json({ message: "Failed to remove favorite movie" });
+    }
+
+    if (deletedData.length === 0) {
+      return res.status(404).json({ message: "Favorite not found" });
+    }
+
+    res.status(200).json({ message: "Movie removed from favorites" });
+  } catch (error) {
+    console.error("Error removing favorite movie:", error);
+    res.status(500).json({ message: "Failed to remove favorite movie" });
+  }
+});
+
+// Get favorites for a specific profile of the authenticated user
 app.get(`/favorites`, async (req, res) => {
   const { profile_id } = req.query;
 
+  // Check if profile_id is provided
   if (!profile_id) {
     return res.status(400).json({ error: "Profile ID is required" });
   }
 
   try {
-    const { data: userResult, error } = await supabase
+    // Query to get the user_id directly from the profiles table
+    const { data, error } = await supabase
       .from("profiles")
       .select("user_id")
-      .eq("profile_id", profile_id);
+      .eq("profile_id", profile_id)
+      .single();
 
-    if (userResult.length === 0) {
-      return res.status(404).json({ error: "No user found for this profile" });
+    if (error) {
+      console.error("Error fetching user ID:", error);
+      return res.status(500).json({ error: "Error fetching favorites" });
     }
 
-    const user_id = userResult[0].user_id;
+    const userId = data.user_id;
+    console.log("Profile ID:", profile_id, "User ID:", userId);
 
-    const { data: result, error: fetchError } = await supabase
+    // Query favorites specific to profile_id and user_id
+    const { data: favoritesData, error: favoritesError } = await supabase
       .from("favorites")
       .select("*")
       .eq("profile_id", profile_id)
-      .eq("user_id", user_id);
+      .eq("user_id", userId);
 
-    if (fetchError) {
-      console.error("Error fetching favorites:", fetchError);
-      return res
-        .status(500)
-        .json({ error: "An error occurred while fetching favorites" });
+    if (favoritesError) {
+      console.error("Error fetching favorites:", favoritesError);
+      return res.status(500).json({ error: "Error fetching favorites" });
     }
 
-    if (result.length === 0) {
+    if (favoritesData.length === 0) {
       return res
         .status(404)
         .json({ error: "No favorites found for this profile" });
     }
 
-    res.json(result);
+    res.json(favoritesData);
   } catch (error) {
     console.error("Error fetching favorites:", error);
     res
       .status(500)
       .json({ error: "An error occurred while fetching favorites" });
+  }
+});
+
+// Get user by email
+app.get(`/users`, async (req, res) => {
+  const { email } = req.query;
+
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+
+    if (!data) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(data); // Return the user ID
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Add a profile
+app.post(`/profiles`, async (req, res) => {
+  console.log(req.body); // Log the incoming request body
+  const { user_id, profile_name } = req.body; // Expect user_id here
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .insert([{ user_id, profile_name }])
+      .single();
+
+    if (error) {
+      console.error("Error adding profile:", error);
+      return res.status(500).json({ message: "Failed to add profile" });
+    }
+
+    res.status(201).json(data); // Return the newly created profile
+  } catch (error) {
+    console.error("Error adding profile:", error); // Log the error
+    res.status(500).json({ message: "Failed to add profile" });
+  }
+});
+
+// Get profiles for the authenticated user
+app.get(`/profiles`, async (req, res) => {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(403).json({ message: "User not authenticated" });
+  }
+
+  const email = req.user.emails[0].value; // Get the authenticated user's email
+
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+
+    const userId = data.id;
+
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (profilesError) {
+      console.error("Error fetching profiles:", profilesError);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+
+    res.status(200).json(profilesData); // Return the profiles
+  } catch (error) {
+    console.error("Error fetching profiles:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Handle deleting a profile
+app.delete(`/profiles/:id`, async (req, res) => {
+  const { id } = req.params; // Extract profile ID from the URL
+  try {
+    // Add your logic to delete the profile from the database
+    const { data, error } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("profile_id", id);
+
+    if (error) {
+      console.error("Error deleting profile:", error);
+      return res.status(500).json({ message: "Failed to delete profile" });
+    }
+
+    if (data.length === 0) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    res.status(200).json({ message: "Profile deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting profile:", error);
+    res.status(500).json({ message: "Failed to delete profile" });
+  }
+});
+
+app.put(`/profiles`, async (req, res) => {
+  const { profile_id, profile_name } = req.body;
+
+  if (!profile_id || !profile_name) {
+    return res
+      .status(400)
+      .json({ message: "Profile ID and name are required." });
+  }
+
+  try {
+    // Update the profile in the database
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ profile_name })
+      .eq("profile_id", profile_id)
+      .single();
+
+    if (error) {
+      console.error("Error updating profile:", error);
+      return res.status(500).json({ message: "Error updating profile." });
+    }
+
+    if (!data) {
+      return res.status(404).json({ message: "Profile not found." });
+    }
+
+    res.status(200).json(data); // Return the updated profile
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ message: "Error updating profile." });
   }
 });
 
