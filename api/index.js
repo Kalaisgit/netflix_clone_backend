@@ -109,11 +109,13 @@ app.get(
 // Check if user is authenticated
 app.get(`/auth/status`, (req, res) => {
   if (req.isAuthenticated()) {
+    console.log("User is authenticated:", req.user); // Log user details
     res.json({
       authenticated: true,
       email: req.user.emails[0].value,
     });
   } else {
+    console.log("User is not authenticated");
     res.json({ authenticated: false });
   }
 });
