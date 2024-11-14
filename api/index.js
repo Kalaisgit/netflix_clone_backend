@@ -46,30 +46,47 @@ app.get(
 app.get(
   `/auth/google/callback`,
   passport.authenticate("google", {
-    failureRedirect: "/",
+    failureRedirect: process.env.FRONTEND_URL,
   }),
   async (req, res) => {
-    const { name, email } = req.user._json;
+    const { name, email } = req.user._json; // Extracting name and email from the Google profile
 
     try {
-      const { data, error } = await supabase.auth.signInWithProvider({
-        provider: "google",
-        email,
-      });
+      // Check if the user already exists in the 'users' table
+      const { data: userResult, error: selectError } = await supabase
+        .from("users")
+        .select("user_id")
+        .eq("email", email);
 
-      if (error) {
-        console.error("Error signing in with Google:", error);
-        return res.status(500).json({ message: "Login failed" });
+      if (selectError) {
+        console.error("Error checking user in database:", selectError);
+        return res.status(500).json({ message: "Internal Server Error" });
       }
 
-      const user = data.user;
-      console.log("User signed in:", user);
+      // If the user does not exist, insert the user into the 'users' table
+      if (userResult.length === 0) {
+        const { data: newUser, error: insertError } = await supabase
+          .from("users")
+          .insert([{ email, name }]);
+
+        if (insertError) {
+          console.error("Error adding user to database:", insertError);
+          return res
+            .status(500)
+            .json({ message: "Failed to add user to the database" });
+        } else {
+          console.log("New user added:", email, name);
+        }
+      } else {
+        console.log("User already exists:", email);
+      }
+
+      // Redirect to the frontend application
+      res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
-      console.error("Error signing in with Google:", error);
+      console.error("Error during Google callback:", error);
       return res.status(500).json({ message: "Login failed" });
     }
-
-    res.redirect(`${process.env.FRONTEND_URL}`);
   }
 );
 
