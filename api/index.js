@@ -46,7 +46,7 @@ app.get(
 app.get(
   `/auth/google/callback`,
   passport.authenticate("google", {
-    failureRedirect: "/",
+    failureRedirect: process.env.FRONTEND_URL,
   }),
   async (req, res) => {
     const { name, email } = req.user._json; // Extracting from _json
