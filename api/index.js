@@ -49,7 +49,7 @@ app.get(
     failureRedirect: process.env.FRONTEND_URL,
   }),
   async (req, res) => {
-    const { name, email } = req.user._json; // Extracting name and email from the Google profile
+    const { name, email } = req.user._json;
 
     try {
       // Check if the user already exists in the 'users' table
@@ -60,10 +60,12 @@ app.get(
 
       if (selectError) {
         console.error("Error checking user in database:", selectError);
-        return res.status(500).json({ message: "Internal Server Error" });
+        // Ensure only one response is sent
+        if (!res.headersSent) {
+          return res.status(500).json({ message: "Internal Server Error" });
+        }
       }
 
-      // If the user does not exist, insert the user into the 'users' table
       if (userResult.length === 0) {
         const { data: newUser, error: insertError } = await supabase
           .from("users")
@@ -71,9 +73,12 @@ app.get(
 
         if (insertError) {
           console.error("Error adding user to database:", insertError);
-          return res
-            .status(500)
-            .json({ message: "Failed to add user to the database" });
+          // Ensure only one response is sent
+          if (!res.headersSent) {
+            return res
+              .status(500)
+              .json({ message: "Failed to add user to the database" });
+          }
         } else {
           console.log("New user added:", email, name);
         }
@@ -81,12 +86,16 @@ app.get(
         console.log("User already exists:", email);
       }
 
-      // Redirect to the frontend application
-      res.redirect(`${process.env.FRONTEND_URL}`);
-      alert("user is registered");
+      // Only send one response, either redirect or JSON
+      if (!res.headersSent) {
+        res.redirect(`${process.env.FRONTEND_URL}`);
+      }
     } catch (error) {
       console.error("Error during Google callback:", error);
-      return res.status(500).json({ message: "Login failed" });
+      // Ensure only one response is sent
+      if (!res.headersSent) {
+        return res.status(500).json({ message: "Login failed" });
+      }
     }
   }
 );
