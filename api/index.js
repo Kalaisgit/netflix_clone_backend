@@ -4,27 +4,17 @@ import session from "express-session";
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors"; // Import the cors package
-import pg from "pg"; // Using PostgreSQL db
+import { createClient } from "@supabase/supabase-js"; // Import the Supabase client
 
 dotenv.config();
 
 const app = express();
-const db = new pg.Client({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_DATABASE,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
 
-// Connect to PostgreSQL database
-db.connect((err) => {
-  if (err) {
-    console.error("Connection error", err.stack);
-  } else {
-    console.log("Connected to the PostgreSQL database");
-  }
-});
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL, // Your Supabase project URL
+  process.env.SUPABASE_KEY // Your Supabase API Key
+);
 
 // Middleware
 app.use(express.json()); // To parse JSON requests
@@ -62,18 +52,23 @@ app.get(
     const { name, email } = req.user._json; // Extracting from _json
 
     try {
-      const userResult = await db.query(
-        "SELECT user_id FROM users WHERE email = $1",
-        [email]
-      );
+      // Check if user already exists
+      const { data: userResult, error } = await supabase
+        .from("users")
+        .select("user_id")
+        .eq("email", email);
 
-      if (userResult.rows.length === 0) {
+      if (userResult.length === 0) {
         // If the user doesn't exist, insert them into the users table
-        await db.query("INSERT INTO users (email, name) VALUES ($1, $2)", [
-          email,
-          name,
-        ]);
-        console.log("New user added:", email, name);
+        const { data: newUser, error: insertError } = await supabase
+          .from("users")
+          .insert([{ email, name }]);
+
+        if (insertError) {
+          console.error("Error adding user to database:", insertError);
+        } else {
+          console.log("New user added:", email, name);
+        }
       } else {
         console.log("User already exists:", email);
       }
@@ -124,48 +119,51 @@ app.post(`/favorites`, async (req, res) => {
 
   try {
     // First, fetch the user_id from the users table based on the email
-    const userQuery = "SELECT user_id FROM users WHERE email = $1";
-    const userResult = await db.query(userQuery, [email]);
+    const { data: userResult, error } = await supabase
+      .from("users")
+      .select("user_id")
+      .eq("email", email);
 
-    if (userResult.rows.length === 0) {
+    if (userResult.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const userId = userResult.rows[0].user_id;
+    const userId = userResult[0].user_id;
 
     // Check if the favorite already exists for this user_id and profile_id
-    const checkQuery = `
-      SELECT * FROM favorites 
-      WHERE user_id = $1 AND profile_id = $2 AND movie_id = $3`;
-    const checkResult = await db.query(checkQuery, [
-      userId,
-      profile_id,
-      movie_id,
-    ]);
+    const { data: checkResult } = await supabase
+      .from("favorites")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("profile_id", profile_id)
+      .eq("movie_id", movie_id);
 
-    if (checkResult.rows.length > 0) {
+    if (checkResult.length > 0) {
       return res
         .status(409)
         .json({ error: "This movie is already in favorites" });
     }
 
     // Insert the favorite as it does not already exist
-    const insertQuery = `
-      INSERT INTO favorites (user_id, profile_id, movie_id, movie_poster, movie_title, movie_year)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *`;
-    const values = [
-      userId,
-      profile_id,
-      movie_id,
-      movie_poster,
-      movie_title,
-      movie_year,
-    ];
+    const { data: newFavorite, error: insertError } = await supabase
+      .from("favorites")
+      .insert([
+        {
+          user_id: userId,
+          profile_id,
+          movie_id,
+          movie_poster,
+          movie_title,
+          movie_year,
+        },
+      ]);
 
-    const result = await db.query(insertQuery, values);
+    if (insertError) {
+      console.error("Error adding favorite:", insertError);
+      return res.status(500).json({ error: "Error adding favorite" });
+    }
 
-    res.status(201).json(result.rows[0]); // Return the newly added favorite
+    res.status(201).json(newFavorite[0]); // Return the newly added favorite
   } catch (error) {
     console.error("Error adding favorite:", error);
     res
@@ -184,24 +182,26 @@ app.delete(`/favorites/:movie_id/:profile_id`, async (req, res) => {
 
   try {
     // Find the user in the database
-    const userResult = await db.query(
-      "SELECT user_id FROM users WHERE email = $1",
-      [req.user.emails[0].value]
-    );
+    const { data: userResult, error } = await supabase
+      .from("users")
+      .select("user_id")
+      .eq("email", req.user.emails[0].value);
 
-    if (userResult.rows.length === 0) {
+    if (userResult.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const userId = userResult.rows[0].user_id;
+    const userId = userResult[0].user_id;
 
     // Delete the movie from the favorites table, using user_id, movie_id, and profile_id
-    const deleteResult = await db.query(
-      "DELETE FROM favorites WHERE user_id = $1 AND movie_id = $2 AND profile_id = $3",
-      [userId, movie_id, profile_id]
-    );
+    const { data: deleteResult, error: deleteError } = await supabase
+      .from("favorites")
+      .delete()
+      .eq("user_id", userId)
+      .eq("movie_id", movie_id)
+      .eq("profile_id", profile_id);
 
-    if (deleteResult.rowCount === 0) {
+    if (deleteError || deleteResult.length === 0) {
       return res.status(404).json({ message: "Favorite not found" });
     }
 
@@ -216,36 +216,44 @@ app.delete(`/favorites/:movie_id/:profile_id`, async (req, res) => {
 app.get(`/favorites`, async (req, res) => {
   const { profile_id } = req.query;
 
-  // Check if profile_id is provided
   if (!profile_id) {
     return res.status(400).json({ error: "Profile ID is required" });
   }
 
   try {
     // Query to get the user_id directly from the profiles table
-    const userQuery = "SELECT user_id FROM profiles WHERE profile_id = $1";
-    const userResult = await db.query(userQuery, [profile_id]);
+    const { data: userResult, error } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("profile_id", profile_id);
 
-    if (userResult.rows.length === 0) {
+    if (userResult.length === 0) {
       return res.status(404).json({ error: "No user found for this profile" });
     }
 
-    const user_id = userResult.rows[0].user_id;
-    console.log("Profile ID:", profile_id, "User ID:", user_id);
+    const user_id = userResult[0].user_id;
 
     // Query favorites specific to profile_id and user_id
-    const query =
-      "SELECT * FROM favorites WHERE profile_id = $1 AND user_id = $2";
-    const values = [profile_id, user_id];
-    const result = await db.query(query, values);
+    const { data: result, error: fetchError } = await supabase
+      .from("favorites")
+      .select("*")
+      .eq("profile_id", profile_id)
+      .eq("user_id", user_id);
 
-    if (result.rows.length === 0) {
+    if (fetchError) {
+      console.error("Error fetching favorites:", fetchError);
+      return res
+        .status(500)
+        .json({ error: "An error occurred while fetching favorites" });
+    }
+
+    if (result.length === 0) {
       return res
         .status(404)
         .json({ error: "No favorites found for this profile" });
     }
 
-    res.json(result.rows);
+    res.json(result);
   } catch (error) {
     console.error("Error fetching favorites:", error);
     res
@@ -259,122 +267,18 @@ app.get(`/users`, async (req, res) => {
   const { email } = req.query;
 
   try {
-    const result = await db.query(
-      "SELECT user_id FROM users WHERE email = $1",
-      [email]
-    );
+    const { data: result, error } = await supabase
+      .from("users")
+      .select("user_id")
+      .eq("email", email);
 
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.status(200).json(result.rows[0]); // Return the user ID
+    res.json(result);
   } catch (error) {
     console.error("Error fetching user:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Failed to fetch user" });
   }
 });
-
-// Add a profile
-app.post(`/profiles`, async (req, res) => {
-  console.log(req.body); // Log the incoming request body
-  const { user_id, profile_name } = req.body; // Expect user_id here
-
-  try {
-    const result = await db.query(
-      "INSERT INTO profiles (user_id, profile_name) VALUES ($1, $2) RETURNING *",
-      [user_id, profile_name]
-    );
-
-    res.status(201).json(result.rows[0]); // Return the newly created profile
-  } catch (error) {
-    console.error("Error adding profile:", error); // Log the error
-    res.status(500).json({ message: "Failed to add profile" });
-  }
-});
-
-// Get profiles for the authenticated user
-app.get(`/profiles`, async (req, res) => {
-  if (!req.isAuthenticated() || !req.user) {
-    return res.status(403).json({ message: "User not authenticated" });
-  }
-
-  const email = req.user.emails[0].value; // Get the authenticated user's email
-
-  try {
-    const userResult = await db.query(
-      "SELECT user_id FROM users WHERE email = $1",
-      [email]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const userId = userResult.rows[0].user_id;
-
-    const profilesResult = await db.query(
-      "SELECT * FROM profiles WHERE user_id = $1",
-      [userId]
-    );
-
-    res.status(200).json(profilesResult.rows); // Return the profiles
-  } catch (error) {
-    console.error("Error fetching profiles:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-// Handle deleting a profile
-app.delete(`/profiles/:id`, async (req, res) => {
-  const { id } = req.params; // Extract profile ID from the URL
-  try {
-    // Add your logic to delete the profile from the database
-    const result = await db.query(
-      "DELETE FROM profiles WHERE profile_id = $1",
-      [id]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Profile not found" });
-    }
-
-    res.status(200).json({ message: "Profile deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting profile:", error);
-    res.status(500).json({ message: "Failed to delete profile" });
-  }
-});
-
-app.put(`/profiles`, async (req, res) => {
-  const { profile_id, profile_name } = req.body;
-
-  if (!profile_id || !profile_name) {
-    return res
-      .status(400)
-      .json({ message: "Profile ID and name are required." });
-  }
-
-  try {
-    // Update the profile in the database
-    const result = await db.query(
-      "UPDATE profiles SET profile_name = $1 WHERE profile_id = $2 RETURNING *",
-      [profile_name, profile_id]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Profile not found." });
-    }
-
-    res.status(200).json(result.rows[0]); // Return the updated profile
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    res.status(500).json({ message: "Error updating profile." });
-  }
-});
-
-/*Start the server
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});*/
