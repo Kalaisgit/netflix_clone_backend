@@ -107,7 +107,6 @@ app.post(`/auth/logout`, (req, res) => {
 
 // Add a favorite movie
 app.post(`/favorites`, async (req, res) => {
-  console.log("Received request to add favorite:", req.body); // Log incoming request data
   const { email, profile_id, movie_id, movie_poster, movie_title, movie_year } =
     req.body;
 
@@ -118,7 +117,6 @@ app.post(`/favorites`, async (req, res) => {
   }
 
   try {
-    // First, fetch the user_id from the users table based on the email
     const { data: userResult, error } = await supabase
       .from("users")
       .select("user_id")
@@ -130,7 +128,6 @@ app.post(`/favorites`, async (req, res) => {
 
     const userId = userResult[0].user_id;
 
-    // Check if the favorite already exists for this user_id and profile_id
     const { data: checkResult } = await supabase
       .from("favorites")
       .select("*")
@@ -144,7 +141,6 @@ app.post(`/favorites`, async (req, res) => {
         .json({ error: "This movie is already in favorites" });
     }
 
-    // Insert the favorite as it does not already exist
     const { data: newFavorite, error: insertError } = await supabase
       .from("favorites")
       .insert([
@@ -163,7 +159,7 @@ app.post(`/favorites`, async (req, res) => {
       return res.status(500).json({ error: "Error adding favorite" });
     }
 
-    res.status(201).json(newFavorite[0]); // Return the newly added favorite
+    res.status(201).json(newFavorite[0]);
   } catch (error) {
     console.error("Error adding favorite:", error);
     res
@@ -172,47 +168,7 @@ app.post(`/favorites`, async (req, res) => {
   }
 });
 
-// Remove a favorite movie
-app.delete(`/favorites/:movie_id/:profile_id`, async (req, res) => {
-  const { movie_id, profile_id } = req.params;
-
-  if (!req.isAuthenticated() || req.user.profile_name === "Guest") {
-    return res.status(403).json({ message: "Guests cannot remove favorites." });
-  }
-
-  try {
-    // Find the user in the database
-    const { data: userResult, error } = await supabase
-      .from("users")
-      .select("user_id")
-      .eq("email", req.user.emails[0].value);
-
-    if (userResult.length === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const userId = userResult[0].user_id;
-
-    // Delete the movie from the favorites table, using user_id, movie_id, and profile_id
-    const { data: deleteResult, error: deleteError } = await supabase
-      .from("favorites")
-      .delete()
-      .eq("user_id", userId)
-      .eq("movie_id", movie_id)
-      .eq("profile_id", profile_id);
-
-    if (deleteError || deleteResult.length === 0) {
-      return res.status(404).json({ message: "Favorite not found" });
-    }
-
-    res.status(200).json({ message: "Movie removed from favorites" });
-  } catch (error) {
-    console.error("Error removing favorite movie:", error);
-    res.status(500).json({ message: "Failed to remove favorite movie" });
-  }
-});
-
-// Get favorites for a specific profile of the authenticated user
+// Get favorites for a specific profile
 app.get(`/favorites`, async (req, res) => {
   const { profile_id } = req.query;
 
@@ -221,7 +177,6 @@ app.get(`/favorites`, async (req, res) => {
   }
 
   try {
-    // Query to get the user_id directly from the profiles table
     const { data: userResult, error } = await supabase
       .from("profiles")
       .select("user_id")
@@ -233,7 +188,6 @@ app.get(`/favorites`, async (req, res) => {
 
     const user_id = userResult[0].user_id;
 
-    // Query favorites specific to profile_id and user_id
     const { data: result, error: fetchError } = await supabase
       .from("favorites")
       .select("*")
@@ -262,23 +216,6 @@ app.get(`/favorites`, async (req, res) => {
   }
 });
 
-// Get user by email
-app.get(`/users`, async (req, res) => {
-  const { email } = req.query;
-
-  try {
-    const { data: result, error } = await supabase
-      .from("users")
-      .select("user_id")
-      .eq("email", email);
-
-    if (result.length === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    res.status(500).json({ message: "Failed to fetch user" });
-  }
-});
+// Vercel needs a handler, so this is the change:
+import { createRequestHandler } from "@vercel/node";
+export default createRequestHandler(app);

@@ -12,6 +12,7 @@
   "description": "Backend of Netflix clone",
   "dependencies": {
     "@supabase/supabase-js": "^2.46.1",
+    "@vercel/node": "^3.2.24",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
