@@ -30,7 +30,10 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false },
+    cookie: {
+      secure: process.env.NODE_ENV === "production", // Set to true in production with HTTPS
+      httpOnly: true,
+    },
   })
 );
 
@@ -66,6 +69,7 @@ app.get(
         }
       }
 
+      // If the user does not exist, insert the user into the 'users' table
       if (userResult.length === 0) {
         const { data: newUser, error: insertError } = await supabase
           .from("users")
@@ -86,8 +90,10 @@ app.get(
         console.log("User already exists:", email);
       }
 
-      // Only send one response, either redirect or JSON
+      // Send the response only if headers have not been sent already
       if (!res.headersSent) {
+        // Set a session or any other logic needed before redirecting
+        // Then redirect to the frontend
         res.redirect(`${process.env.FRONTEND_URL}`);
       }
     } catch (error) {
