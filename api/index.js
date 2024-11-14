@@ -5,8 +5,6 @@ import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors"; // Import the cors package
 import { createClient } from "@supabase/supabase-js"; // Import the Supabase client
-import pkg from "@vercel/node";
-const { createRequestHandler } = pkg;
 
 dotenv.config();
 
@@ -218,4 +216,4 @@ app.get(`/favorites`, async (req, res) => {
   }
 });
 
-export default createRequestHandler(app);
+export default app;
