@@ -82,7 +82,8 @@ app.get(
       }
 
       // Redirect to the frontend application
-      res.redirect("/");
+      res.redirect(`${process.env.FRONTEND_URL}`);
+      alert("user is registered");
     } catch (error) {
       console.error("Error during Google callback:", error);
       return res.status(500).json({ message: "Login failed" });
