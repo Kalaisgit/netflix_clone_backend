@@ -82,7 +82,7 @@ app.get(
       }
 
       // Redirect to the frontend application
-      res.redirect(`${process.env.FRONTEND_URL}/profiles`);
+      res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
       console.error("Error during Google callback:", error);
       return res.status(500).json({ message: "Login failed" });
