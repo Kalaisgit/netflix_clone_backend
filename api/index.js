@@ -33,6 +33,8 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === "production", // Set to true in production with HTTPS
       httpOnly: true,
+      maxAge: 3600000, // 1 hour
+      sameSite: "None", // Necessary for cross-origin cookies
     },
   })
 );
@@ -51,7 +53,9 @@ app.get(
   passport.authenticate("google", {
     failureRedirect: process.env.FRONTEND_URL,
   }),
+
   async (req, res) => {
+    console.log("Authenticated user:", req.user); // Log the user object to confirm the user is authenticated
     const { name, email } = req.user._json;
 
     try {
