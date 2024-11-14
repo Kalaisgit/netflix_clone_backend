@@ -31,7 +31,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Set to true in production with HTTPS
+      secure: process.env.NODE_ENV === "production" ? true : false, // False for development
       httpOnly: true,
       maxAge: 3600000, // 1 hour
       sameSite: "None", // Necessary for cross-origin cookies
@@ -55,7 +55,7 @@ app.get(
   }),
 
   async (req, res) => {
-    console.log("Authenticated user:", req.user); // Log the user object to confirm the user is authenticated
+    console.log("Authenticated User Session:", req.session);
     const { name, email } = req.user._json;
 
     try {
