@@ -19,12 +19,6 @@ const supabase = createClient(
 // Middleware
 app.use(express.json());
 
-const corsOptions = {
-  origin: process.env.FRONTEND_URL, // Frontend URL
-  credentials: true, // Important for cross-origin cookies
-};
-app.use(cors(corsOptions));
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -44,9 +38,10 @@ app.use(passport.session());
 
 // Middleware
 app.use(express.json());
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL,
-  credentials: true,
+  origin: process.env.FRONTEND_URL, // Frontend URL
+  credentials: true, // Important for cross-origin cookies
 };
 app.use(cors(corsOptions));
 
