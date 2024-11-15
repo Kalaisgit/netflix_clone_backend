@@ -5,8 +5,6 @@ import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import Redis from "ioredis";
-import connectRedis from "connect-redis";
 
 dotenv.config();
 
@@ -21,7 +19,6 @@ const supabase = createSupabaseClient(
 // Middleware
 app.use(express.json());
 app.use(passport.initialize());
-app.use(passport.session());
 
 // CORS setup
 const corsOptions = {
@@ -30,31 +27,46 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Set up Redis client
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST,
-  port: process.env.REDIS_PORT,
-  password: process.env.REDIS_PASSWORD,
-});
+// Custom session middleware using Supabase
+app.use(async (req, res, next) => {
+  const sessionToken = req.headers.authorization?.split(" ")[1]; // Expecting "Bearer <token>"
 
-// Set up session store with Redis
-const RedisStore = connectRedis(session);
+  if (!sessionToken) {
+    req.user = null;
+    return next();
+  }
 
-app.use(
-  session({
-    store: new RedisStore({ client: redisClient }),
-    secret: process.env.REDIS_SESSION_SECRET, // Session secret
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-      secure: false, // Set to true if using HTTPS
-      httpOnly: true,
-    },
-  })
-);
+  try {
+    const { data: sessionData, error } = await supabase
+      .from("sessions")
+      .select("user_id, expires_at")
+      .eq("token", sessionToken)
+      .single();
 
-app.get("/", (req, res) => {
-  res.send("Session setup complete");
+    if (
+      error ||
+      !sessionData ||
+      new Date(sessionData.expires_at) < new Date()
+    ) {
+      req.user = null;
+    } else {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, email, name")
+        .eq("id", sessionData.user_id)
+        .single();
+
+      if (userError) {
+        req.user = null;
+      } else {
+        req.user = userData;
+      }
+    }
+  } catch (err) {
+    console.error("Error fetching session:", err);
+    req.user = null;
+  }
+  next();
 });
 
 // Google Authentication Routes
