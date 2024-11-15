@@ -5,8 +5,8 @@ import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import Redis from "ioredis";
 import connectRedis from "connect-redis";
-import { createClient as createRedisClient } from "redis";
 
 dotenv.config();
 
@@ -30,40 +30,25 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Create Redis client
-const redisClient = createRedisClient({
-  socket: {
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-  },
-  password: process.env.REDIS_PASSWORD, // Redis password
+// Set up Redis client
+const redisClient = new Redis({
+  host: process.env.REDIS_HOST,
+  port: process.env.REDIS_PORT,
+  password: process.env.REDIS_PASSWORD,
 });
 
-redisClient
-  .connect()
-  .then(() => {
-    console.log("Connected to Redis");
-  })
-  .catch((err) => {
-    console.error("Redis connection error:", err);
-  });
-
-// Redis Store setup (must use `new` here)
+// Set up session store with Redis
 const RedisStore = connectRedis(session);
-const redisStoreInstance = new RedisStore({ client: redisClient });
 
-// Configure session middleware
 app.use(
   session({
-    store: redisStoreInstance,
-    secret: process.env.REDIS_SESSION_SECRET, // Use session secret from env
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.REDIS_SESSION_SECRET, // Session secret
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: {
+      secure: false, // Set to true if using HTTPS
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Only set to true in production (https)
-      sameSite: "None",
-      maxAge: 3600000, // 1 hour
     },
   })
 );
