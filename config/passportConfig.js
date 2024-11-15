@@ -1,10 +1,14 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import dotenv from "dotenv";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-// Google OAuth strategy
+const supabase = createSupabaseClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 passport.use(
   new GoogleStrategy(
     {
@@ -13,7 +17,7 @@ passport.use(
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
     },
     function (token, tokenSecret, profile, done) {
-      // Use profile to create or find the user
+      // Interact with Supabase here with the initialized supabase client
       supabase
         .from("users")
         .upsert({

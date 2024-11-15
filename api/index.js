@@ -44,8 +44,7 @@ app.use(cors(corsOptions));
 
 // Custom session middleware using Supabase
 app.use(async (req, res, next) => {
-  const sessionToken = req.headers.authorization?.split(" ")[1]; // Expecting "Bearer <token>"
-
+  const sessionToken = req.headers.authorization?.split(" ")[1];
   if (!sessionToken) {
     req.user = null;
     return next();
