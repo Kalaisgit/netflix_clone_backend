@@ -6,6 +6,7 @@ import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import connectRedis from "connect-redis";
+import { createClient as createRedisClient } from "redis";
 
 dotenv.config();
 
@@ -19,17 +20,10 @@ const supabase = createClient(
 
 // Middleware
 app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("Session setup complete");
-});
-
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Middleware
-app.use(express.json());
-
+// CORS setup
 const corsOptions = {
   origin: process.env.FRONTEND_URL, // Frontend URL
   credentials: true, // Important for cross-origin cookies
@@ -39,7 +33,7 @@ app.use(cors(corsOptions));
 const RedisStore = connectRedis(session);
 
 // Create Redis client using environment variables
-const redisClient = createClient({
+const redisClient = createRedisClient({
   socket: {
     host: process.env.REDIS_HOST,
     port: process.env.REDIS_PORT,
@@ -65,8 +59,9 @@ app.use(
   })
 );
 
-app.use(passport.initialize());
-app.use(passport.session());
+app.get("/", (req, res) => {
+  res.send("Session setup complete");
+});
 
 // Google Authentication Routes
 app.get(
