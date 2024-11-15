@@ -18,12 +18,11 @@ const supabase = createClient(
 
 // Middleware
 app.use(express.json());
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: process.env.FRONTEND_URL, // Frontend URL
+  credentials: true, // Important for cross-origin cookies
+};
+app.use(cors(corsOptions));
 
 app.use(
   session({
@@ -31,14 +30,38 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production" ? true : false, // False for development
+      secure: true, // Essential for production with HTTPS
       httpOnly: true,
       maxAge: 3600000, // 1 hour
-      sameSite: "None", // Necessary for cross-origin cookies
+      sameSite: "None", // Required for cross-origin requests
     },
   })
 );
 
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Middleware
+app.use(express.json());
+const corsOptions = {
+  origin: process.env.FRONTEND_URL,
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: true, // Required for HTTPS
+      httpOnly: true,
+      maxAge: 3600000, // 1 hour
+      sameSite: "None", // Cross-origin requests
+    },
+  })
+);
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -53,73 +76,49 @@ app.get(
   passport.authenticate("google", {
     failureRedirect: process.env.FRONTEND_URL,
   }),
-
   async (req, res) => {
     console.log("Authenticated User Session:", req.session);
-    const { name, email } = req.user._json;
+
+    const { id, email, name } = req.user;
 
     try {
-      // Check if the user already exists in the 'users' table
+      // Check if the user exists in the database
       const { data: userResult, error: selectError } = await supabase
         .from("users")
         .select("user_id")
         .eq("email", email);
 
-      if (selectError) {
-        console.error("Error checking user in database:", selectError);
-        // Ensure only one response is sent
-        if (!res.headersSent) {
-          return res.status(500).json({ message: "Internal Server Error" });
-        }
-      }
+      if (selectError) throw new Error(selectError.message);
 
-      // If the user does not exist, insert the user into the 'users' table
       if (userResult.length === 0) {
-        const { data: newUser, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from("users")
           .insert([{ email, name }]);
+        if (insertError) throw new Error(insertError.message);
 
-        if (insertError) {
-          console.error("Error adding user to database:", insertError);
-          // Ensure only one response is sent
-          if (!res.headersSent) {
-            return res
-              .status(500)
-              .json({ message: "Failed to add user to the database" });
-          }
-        } else {
-          console.log("New user added:", email, name);
-        }
+        console.log("New user added to database:", email);
       } else {
         console.log("User already exists:", email);
       }
 
-      // Send the response only if headers have not been sent already
-      if (!res.headersSent) {
-        // Set a session or any other logic needed before redirecting
-        // Then redirect to the frontend
-        res.redirect(`${process.env.FRONTEND_URL}`);
-      }
+      res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
       console.error("Error during Google callback:", error);
-      // Ensure only one response is sent
       if (!res.headersSent) {
-        return res.status(500).json({ message: "Login failed" });
+        res.status(500).json({ message: "Internal Server Error" });
       }
     }
   }
 );
 
-// Check if user is authenticated
+// Check if the user is authenticated
 app.get(`/auth/status`, (req, res) => {
+  console.log("Session Data:", req.session);
+  console.log("Authenticated User:", req.user);
+
   if (req.isAuthenticated()) {
-    console.log("User is authenticated:", req.user); // Log user details
-    res.json({
-      authenticated: true,
-      email: req.user.emails[0].value,
-    });
+    res.json({ authenticated: true, email: req.user.email });
   } else {
-    console.log("User is not authenticated");
     res.json({ authenticated: false });
   }
 });

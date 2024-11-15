@@ -2,7 +2,7 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import dotenv from "dotenv";
 
-dotenv.config(); // Load the .env file
+dotenv.config(); // Load environment variables
 
 // Configure the Google OAuth strategy
 passport.use(
@@ -12,22 +12,36 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
     },
-    (accessToken, refreshToken, profile, done) => {
-      // This callback is called after Google authenticates the user
-      // You can use the profile info (Google ID, name, etc.) to identify the user
-      // For now, we'll just log the profile and pass it to `done`
-      console.log("Google profile:", profile);
-      done(null, profile); // Pass profile to next middleware
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        // Extract relevant user information
+        const user = {
+          id: profile.id,
+          email: profile.emails[0].value,
+          name: profile.displayName,
+        };
+
+        console.log("Authenticated user from Google:", user);
+
+        // Pass the user object to the next middleware
+        done(null, user);
+      } catch (error) {
+        console.error("Error in Google OAuth callback:", error);
+        done(error, null); // Pass the error to Passport
+      }
     }
   )
 );
 
-// Serialize the user for the session
+// Serialize the user into the session (store minimal data, e.g., Google ID)
 passport.serializeUser((user, done) => {
-  done(null, user);
+  console.log("Serializing user:", user.id);
+  done(null, user.id); // Store only the Google ID in the session
 });
 
 // Deserialize the user from the session
-passport.deserializeUser((user, done) => {
-  done(null, user);
+passport.deserializeUser((id, done) => {
+  console.log("Deserializing user:", id);
+  // Retrieve user details from the database if needed
+  done(null, { id }); // Simplified for demonstration
 });
