@@ -3,7 +3,7 @@ import passport from "passport";
 import session from "express-session";
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -18,6 +18,7 @@ const supabase = createClient(
 
 // Middleware
 app.use(express.json());
+
 const corsOptions = {
   origin: process.env.FRONTEND_URL, // Frontend URL
   credentials: true, // Important for cross-origin cookies
