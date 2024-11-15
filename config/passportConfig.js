@@ -2,9 +2,9 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import dotenv from "dotenv";
 
-dotenv.config(); // Load environment variables
+dotenv.config();
 
-// Configure the Google OAuth strategy
+// Google OAuth strategy
 passport.use(
   new GoogleStrategy(
     {
@@ -12,33 +12,40 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
     },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        // Extract relevant user information
-        const user = {
+    function (token, tokenSecret, profile, done) {
+      // Use profile to create or find the user
+      supabase
+        .from("users")
+        .upsert({
           id: profile.id,
           email: profile.emails[0].value,
           name: profile.displayName,
-        };
-
-        console.log("Authenticated user from Google:", user);
-
-        // Pass the user object to the next middleware
-        done(null, user);
-      } catch (error) {
-        console.error("Error in Google OAuth callback:", error);
-        done(error, null); // Pass the error to Passport
-      }
+        })
+        .then(({ data, error }) => {
+          if (error) return done(error, null);
+          done(null, data[0]);
+        });
     }
   )
 );
 
+// Configure Passport to serialize and deserialize user info
 passport.serializeUser((user, done) => {
-  console.log("Serializing user:", user); // Debug here
-  done(null, user);
+  done(null, user.id); // Store only the user ID in session
 });
 
-passport.deserializeUser((user, done) => {
-  console.log("Deserializing user:", user); // Debug here
-  done(null, user);
+passport.deserializeUser((id, done) => {
+  // Fetch user from database by ID (you can use Supabase here)
+  supabase
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .single()
+    .then(({ data, error }) => {
+      if (error) {
+        done(error, null);
+      } else {
+        done(null, data);
+      }
+    });
 });
