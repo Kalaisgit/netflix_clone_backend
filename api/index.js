@@ -1,6 +1,6 @@
 import express from "express";
 import passport from "passport";
-import session from "express-session";
+import session from "express-session"; // Import express-session
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
@@ -19,6 +19,21 @@ const supabase = createSupabaseClient(
 // Middleware
 app.use(express.json());
 app.use(passport.initialize());
+app.use(passport.session()); // Add this line for session management
+
+// Initialize express-session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "your-secret-key", // Replace with your own secret
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Set secure cookie in production
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    },
+  })
+);
 
 // CORS setup
 const corsOptions = {
