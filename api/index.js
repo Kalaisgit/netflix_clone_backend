@@ -43,13 +43,14 @@ redisClient
   .connect()
   .catch((err) => console.error("Redis connection error:", err));
 
-// Redis Store
+// Redis Store setup (must use `new` here)
 const RedisStore = connectRedis(session);
+const redisStoreInstance = new RedisStore({ client: redisClient });
 
 // Configure session middleware
 app.use(
   session({
-    store: new RedisStore({ client: redisClient }),
+    store: redisStoreInstance,
     secret: process.env.REDIS_SESSION_SECRET, // Use session secret from env
     resave: false,
     saveUninitialized: false,
