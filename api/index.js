@@ -4,7 +4,7 @@ import session from "express-session";
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import connectRedis from "connect-redis";
 import { createClient as createRedisClient } from "redis";
 
@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 
 // Initialize Supabase client
-const supabase = createClient(
+const supabase = createSupabaseClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 );
@@ -30,18 +30,21 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-const RedisStore = connectRedis(session);
-
-// Create Redis client using environment variables
+// Create Redis client
 const redisClient = createRedisClient({
   socket: {
     host: process.env.REDIS_HOST,
     port: process.env.REDIS_PORT,
   },
-  password: process.env.REDIS_PASSWORD, // Use password from env
+  password: process.env.REDIS_PASSWORD, // Redis password
 });
 
-redisClient.connect();
+redisClient
+  .connect()
+  .catch((err) => console.error("Redis connection error:", err));
+
+// Redis Store
+const RedisStore = connectRedis(session);
 
 // Configure session middleware
 app.use(
@@ -52,9 +55,9 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true, // Set to true if using https
+      secure: process.env.NODE_ENV === "production", // Only set to true in production (https)
       sameSite: "None",
-      maxAge: 3600000,
+      maxAge: 3600000, // 1 hour
     },
   })
 );
