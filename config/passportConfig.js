@@ -33,13 +33,11 @@ passport.use(
   )
 );
 
-// Serialize the user into the session (store minimal data, e.g., Google ID)
 passport.serializeUser((user, done) => {
   console.log("Serializing user:", user); // Debug here
   done(null, user);
 });
 
-//Deserialize
 passport.deserializeUser((user, done) => {
   console.log("Deserializing user:", user); // Debug here
   done(null, user);
