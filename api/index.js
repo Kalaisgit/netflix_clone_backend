@@ -3,7 +3,7 @@ import passport from "passport";
 import session from "express-session";
 import dotenv from "dotenv";
 import "../config/passportConfig.js"; // Passport config for Google strategy
-import cors, { CorsOptions } from "cors";
+import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
