@@ -84,6 +84,10 @@ app.use(async (req, res, next) => {
   next();
 });
 
+app.get("/", (req, res) => {
+  res.send("Server is running!");
+});
+
 // Google Authentication Routes
 app.get(
   `/auth/google`,
