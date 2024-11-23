@@ -135,6 +135,8 @@ app.get(`/auth/status`, (req, res) => {
   console.log("Session Data:", req.session);
   console.log("Authenticated User:", req.user);
 
+  console.log(isAuthenticated);
+
   if (req.isAuthenticated()) {
     res.json({ authenticated: true, email: req.user.email });
   } else {
