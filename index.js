@@ -2,13 +2,14 @@ import express from "express";
 import passport from "passport";
 import session from "express-session"; // Import express-session
 import dotenv from "dotenv";
-import "../config/passportConfig.js"; // Passport config for Google strategy
+import "./config/passportConfig.js"; // Passport config for Google strategy
 import cors from "cors";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
 const app = express();
+const port = process.env.PORT || 5001;
 
 // Initialize Supabase client
 const supabase = createSupabaseClient(
@@ -443,4 +444,6 @@ app.delete(`/profiles/:profile_id`, async (req, res) => {
   }
 });
 
-export default app;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
